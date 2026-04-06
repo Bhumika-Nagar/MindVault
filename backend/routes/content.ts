@@ -1,93 +1,22 @@
-import dotenv from "dotenv";
-dotenv.config();
-import express from "express";
-import mongoose from "mongoose";
-import jwt from "jsonwebtoken";
-import z,{string} from "zod";
-import { validateHeaderName } from "node:http";
-import bcrypt from "bcrypt";
-import {User} from "./db";
-import {Content} from "./db";
-import {auth_middleware} from "./middlewares"
+const express= require("express");
+const router=express.Router();
+const z= require("zod");
+const bcrypt= require("bcrypt");
+const jwt= require("jsonwebtoken");
+import { User } from "../src/db";
+import { Content } from "../src/db";
 import { Response} from "express";
 import { Request } from "express";
-import {Link} from "./db";
-import { random } from "./utils"
-import { hash } from "node:crypto";
+import { auth_middleware } from "../src/middlewares";
+import mongoose= require("mongoose");
+import {Link} from "../src/db";
+import { random } from "../src/utils";
 
 interface AuthRequest extends Request {
   userId?: string;
 }
 
-const app= express();
-
-app.use(express.json());
-
-app.post("/api/v1/signup", async (req, res) => {
-  try {
-    const signupSchema = z.object({
-      username: z.string().min(3).max(20),
-      password: z.string().min(6).max(18),
-    });
-
-    const validatedInput = signupSchema.safeParse(req.body);
-
-    if (!validatedInput.success) {
-      return res.status(400).json({
-        message: "invalid input",
-      });
-    }
-
-    const { username, password } = validatedInput.data;
-
-    const hashedPassword = await bcrypt.hash(password, 5);
-
-    await User.create({
-      username,
-      password: hashedPassword,
-    });
-
-    return res.status(201).json({
-      message: "User created successfully",
-    });
-  } catch (err) {
-    if (err instanceof Error) {
-      res.status(500).json({ error: err.message });
-    } else {
-      res.status(500).json({ error: "Something went wrong" });
-    }
-  }
-});
-
-
-
-app.post("/login",async(req,res)=>{
-    const{username,password}= req.body;
-    const user = await User.findOne({ username });
-
-if (!user) {
-    throw new Error("User not found"); 
-}
-
-const isMatch = await bcrypt.compare(password, user.password);
-
-if (!isMatch) {
-    throw new Error("Invalid credentials");
-}
-    
-    const token= jwt.sign({id:user._id.toString()},process.env.JWT_SECRET as string);
-    res.json({
-        token,
-        message:"you are signed in"
-    });
-
-})
-
-
-app.post(
-  "/api/v1/content",
-  auth_middleware,
-  async (req: AuthRequest, res) => {
+router.post("/api/v1/createcontent",auth_middleware,async (req: AuthRequest, res:Response) => {
     try {
       const createContent = z.object({
         link: z.string().url(),
@@ -118,7 +47,7 @@ app.post(
         type,
         title,
         userId:new mongoose.Types.ObjectId(userId),
-        tags:(tags ?? []).map(id => new mongoose.Types.ObjectId(id)),
+        tags:(tags ?? []).map((id: string) => new mongoose.Types.ObjectId(id)),
       });
 
       return res.status(201).json({
@@ -136,7 +65,7 @@ app.post(
   }
 );
 
-app.get("/api/v1/content",auth_middleware,async(req:AuthRequest,res:Response)=>{
+router.get("/api/v1/content",auth_middleware,async(req:AuthRequest,res:Response)=>{
   try{
   const userId= req.userId;
    if (!userId) {
@@ -169,7 +98,7 @@ app.get("/api/v1/content",auth_middleware,async(req:AuthRequest,res:Response)=>{
 
 });
 
-app.delete("/api/v1/content/:contentId",auth_middleware,async(req:AuthRequest,res:Response)=>{
+router.delete("/api/v1/content/:contentId",auth_middleware,async(req:AuthRequest,res:Response)=>{
 
   const contentId= req.params.contentId as string;
   const userId= req.userId;
@@ -186,7 +115,7 @@ app.delete("/api/v1/content/:contentId",auth_middleware,async(req:AuthRequest,re
   })
 });
 
-app.post("/api/v1/brain/share",auth_middleware,async(req,res)=>{
+router.post("/api/v1/brain/share",auth_middleware,async(req:AuthRequest,res:Response)=>{
   const share=req.body.share;
   const userId= req.userId;
   if(!userId){
@@ -227,7 +156,7 @@ app.post("/api/v1/brain/share",auth_middleware,async(req,res)=>{
 }
 });
 
-app.post("/api/v1/brain/:shareLink",async(req,res)=>{
+router.post("/api/v1/brain/:shareLink",async(req:Request<{ shareLink: string }>,res:Response)=>{
   //a random user wants to see publicly available content provided by a creator
   const hash= req.params.shareLink;
   
@@ -264,25 +193,3 @@ app.post("/api/v1/brain/:shareLink",async(req,res)=>{
 });
 
 
-
-const PORT = process.env.PORT;
-const MONGO_URI = process.env.MONGO_URI;
-
-async function startServer() {
-    try {
-        if (!MONGO_URI) {
-            throw new Error("MONGO_URI is missing in .env");
-        }
-
-        await mongoose.connect(MONGO_URI);
-        console.log("MongoDB connected");
-
-        app.listen(PORT, () => {
-            console.log(`Server running on port ${PORT}`);
-        });
-    } catch (error) {
-        console.error("Server failed to start", error);
-    }
-}
-
-startServer();
