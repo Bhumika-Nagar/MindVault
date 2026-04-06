@@ -2,10 +2,14 @@ import dotenv from "dotenv";
 dotenv.config();
 import express from "express";
 import mongoose from "mongoose";
+import { MongoServerError } from "mongodb";
+import cors from "cors";
+import mainRouter from "./routes/index";
 const app= express();
 app.use(express.json());
+app.use(cors());
 
-app.use("/api/v1")
+app.use("/api/v1",mainRouter);
 
 
 const PORT = process.env.PORT;
@@ -24,6 +28,9 @@ async function startServer() {
             console.log(`Server running on port ${PORT}`);
         });
     } catch (error) {
+        if (error instanceof MongoServerError && error.code === 8000) {
+            console.error("MongoDB authentication failed. Check Atlas Database Access credentials, password encoding in MONGO_URI, and Network Access allowlist.");
+        }
         console.error("Server failed to start", error);
     }
 }

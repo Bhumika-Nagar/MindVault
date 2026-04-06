@@ -1,22 +1,25 @@
-const express= require("express");
-const router=express.Router();
-const z= require("zod");
-const bcrypt= require("bcrypt");
-const jwt= require("jsonwebtoken");
-import { User } from "../src/db";
+import express, { Request, Response } from "express";
+import { z } from "zod";
 import { Content } from "../src/db";
-import { Response} from "express";
-import { Request } from "express";
 import { auth_middleware } from "../src/middlewares";
 import mongoose= require("mongoose");
 import {Link} from "../src/db";
 import { random } from "../src/utils";
+const router = express.Router();
 
 interface AuthRequest extends Request {
   userId?: string;
 }
 
-router.post("/api/v1/createcontent",auth_middleware,async (req: AuthRequest, res:Response) => {
+function getShareUrl(req: Request, hash: string) {
+  const frontendBaseUrl = process.env.FRONTEND_BASE_URL?.replace(/\/$/, "");
+  const requestOrigin = req.get("origin")?.replace(/\/$/, "");
+  const baseUrl = frontendBaseUrl || requestOrigin;
+
+  return baseUrl ? `${baseUrl}/shared/${hash}` : null;
+}
+
+async function createContentHandler(req: AuthRequest, res:Response) {
     try {
       const createContent = z.object({
         link: z.string().url(),
@@ -62,10 +65,9 @@ router.post("/api/v1/createcontent",auth_middleware,async (req: AuthRequest, res
         res.status(500).json({ error: "Something went wrong" });
       }
     }
-  }
-);
+  };
 
-router.get("/api/v1/content",auth_middleware,async(req:AuthRequest,res:Response)=>{
+async function getContentHandler(req:AuthRequest,res:Response){
   try{
   const userId= req.userId;
    if (!userId) {
@@ -96,9 +98,9 @@ router.get("/api/v1/content",auth_middleware,async(req:AuthRequest,res:Response)
 }
 
 
-});
+};
 
-router.delete("/api/v1/content/:contentId",auth_middleware,async(req:AuthRequest,res:Response)=>{
+async function deleteContentHandler(req:AuthRequest,res:Response){
 
   const contentId= req.params.contentId as string;
   const userId= req.userId;
@@ -109,87 +111,95 @@ router.delete("/api/v1/content/:contentId",auth_middleware,async(req:AuthRequest
       }
      
 
-  const deleteContent= await Content.findOneAndDelete({
+  const deletedContent= await Content.findOneAndDelete({
     _id:new mongoose.Types.ObjectId(contentId),
      userId: new mongoose.Types.ObjectId(userId)
   })
-});
 
-router.post("/api/v1/brain/share",auth_middleware,async(req:AuthRequest,res:Response)=>{
-  const share=req.body.share;
-  const userId= req.userId;
-  if(!userId){
-      return res.status(401).json({
-          message: "unauthorized user"
-        });
-      
-  }
-  if(share){
-    const existingLink= await Link.findOne({
-        userId
+  if(!deletedContent){
+    return res.status(404).json({
+      message:"content not found"
     });
-    if(existingLink){
-      res.json({
-        hash:existingLink.hash
-      })
-      return;
+  }
+
+  return res.status(200).json({
+    message:"content deleted successfully"
+  });
+};
+
+
+async function shareContentHandler(req: AuthRequest, res: Response) {
+  const { share } = req.body;
+  const userId = req.userId;
+
+  if (!userId) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  if (share) {
+    let existingLink = await Link.findOne({ userId });
+
+    if (existingLink?.hash) {
+      return res.json({
+        hash: existingLink.hash,
+        shareUrl: getShareUrl(req, existingLink.hash)
+      });
     }
 
-    const hash=random(10);
+    const hash = random(12);
+
     await Link.create({
       userId,
-      hash:hash
-    })
-  
-
-  res.json({
-    message:"updated sharable link",
-    hash:hash
-  })
-}else{
-    await  Link.deleteOne({
-      userId
+      hash
     });
-    res.json({
-      message:"Removed Link"
-    })
+
+    return res.json({
+      message: "Sharable link created",
+      hash,
+      shareUrl: getShareUrl(req, hash)
+    });
+  } else {
+    await Link.deleteOne({ userId });
+
+    return res.json({
+      message: "Sharing disabled"
+    });
+  }
 }
-});
 
-router.post("/api/v1/brain/:shareLink",async(req:Request<{ shareLink: string }>,res:Response)=>{
-  //a random user wants to see publicly available content provided by a creator
-  const hash= req.params.shareLink;
-  
-  const link= await Link.findOne({
-    hash:hash
-  })
+async function getSharedContentHandler(
+  req: Request<{ shareLink: string }>,
+  res: Response
+) {
+  const hash = req.params.shareLink;
 
-  if(!link){
-    res.status(411).json({
-       message:"sorry incorrect input"
-    })
-    return;
+  const link = await Link.findOne({ hash }).populate<{ userId: { _id: mongoose.Types.ObjectId; username: string } }>("userId");
+
+  if (!link || !link.userId) {
+    return res.status(404).json({
+      message: "Link not found"
+    });
   }
 
-  const content= await Content.find({
-    userId:link.userId
-  })
+  const content = await Content.find({
+    userId: link.userId._id
+  });
 
-  const user= await User.findOne({
-      _id:link.userId
-  })
-  if(!user){
-    res.status(411).json({
-      message:"user not found"
-    })
-    return;
-  }
+  return res.json({
+    username: link.userId.username,
+    content
+  });
+}
 
-  res.json({
-    username:user.username,
-    content:content
-  })
+router.post("/", auth_middleware, createContentHandler);
+router.post("/api/v1/createcontent", auth_middleware, createContentHandler);
+router.get("/", auth_middleware, getContentHandler);
+router.get("/api/v1/content", auth_middleware, getContentHandler);
+router.delete("/:contentId", auth_middleware, deleteContentHandler);
+router.delete("/api/v1/content/:contentId", auth_middleware, deleteContentHandler);
+router.post("/share", auth_middleware, shareContentHandler);
+router.post("/api/v1/brain/share", auth_middleware, shareContentHandler);
+router.get("/share/:shareLink", getSharedContentHandler);
+router.post("/api/v1/brain/:shareLink", getSharedContentHandler);
 
-});
-
-
+export default router;

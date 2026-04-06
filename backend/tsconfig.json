@@ -7,7 +7,7 @@
 
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
-    "module": "commonjs",
+    "module": "Node16",
     "target": "ES2020",
     "types": ["node"],
     // For nodejs:
@@ -34,7 +34,7 @@
 
     // Recommended Options
     "esModuleInterop": true,
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "strict": true,
   
   
@@ -42,6 +42,6 @@
     
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "routes/**/*.ts"],
+  "include": ["server.ts", "src/**/*.ts", "routes/**/*.ts"],
   "exclude": ["dist", "node_modules"]
 }
