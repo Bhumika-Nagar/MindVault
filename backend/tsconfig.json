@@ -2,14 +2,14 @@
   // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
     // File Layout
-    "rootDir": "./src",
+    "rootDir": "./",
     "outDir": "./dist",
 
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
     "module": "commonjs",
     "target": "ES2020",
-    "types": [],
+    "types": ["node"],
     // For nodejs:
     // "lib": ["esnext"],
     // "types": ["node"],
@@ -40,6 +40,8 @@
   
     "noUncheckedSideEffectImports": true,
     
-    "skipLibCheck": true,
-  }
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "routes/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
 }
