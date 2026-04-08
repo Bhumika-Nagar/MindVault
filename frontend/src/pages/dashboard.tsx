@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreateContentForm } from "../components/content/CreateContentForm";
 import { ContentCard } from "../components/dashboard/ContentCard";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
 import { clearStoredToken } from "../lib/auth";
 import { contentService } from "../services/content";
 import type { Content, ContentType } from "../types/content";
@@ -101,7 +103,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-full bg-canvas px-4 py-6 dark:bg-canvas-dark sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="surface flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <Card as="header" className="flex flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.22em] text-stone-400">MindVault</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
@@ -112,15 +114,15 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <button
+          <Button
             type="button"
             onClick={handleLogout}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-medium text-stone-700 transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800"
+            variant="secondary"
+            leadingIcon={<LogOut className="size-4" />}
           >
-            <LogOut className="size-4" />
             Logout
-          </button>
-        </header>
+          </Button>
+        </Card>
 
         <div className="grid gap-6 xl:grid-cols-[1.05fr_1.4fr]">
           <div className="space-y-6">
@@ -135,7 +137,7 @@ export default function DashboardPage() {
               }}
             />
 
-            <section className="surface p-6">
+            <Card as="section" className="p-6">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[0.22em] text-stone-400">Share</p>
@@ -150,28 +152,25 @@ export default function DashboardPage() {
               </div>
 
               <div className="mt-5 flex flex-wrap gap-3">
-                <button
+                <Button
                   type="button"
                   onClick={() => {
                     void handleShare(true);
                   }}
-                  disabled={isSharing}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-stone-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+                  leadingIcon={isSharing ? <LoaderCircle className="size-4 animate-spin" /> : null}
                 >
-                  {isSharing ? <LoaderCircle className="size-4 animate-spin" /> : null}
                   Enable sharing
-                </button>
+                </Button>
 
-                <button
+                <Button
                   type="button"
                   onClick={() => {
                     void handleShare(false);
                   }}
-                  disabled={isSharing}
-                  className="inline-flex items-center justify-center rounded-2xl border border-stone-200 bg-white px-5 py-3 text-sm font-medium text-stone-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800"
+                  variant="secondary"
                 >
                   Disable sharing
-                </button>
+                </Button>
               </div>
 
               {shareLink ? (
@@ -183,7 +182,7 @@ export default function DashboardPage() {
                   <p className="mt-2 break-all">{shareLink}</p>
                 </div>
               ) : null}
-            </section>
+            </Card>
           </div>
 
           <section className="space-y-4">
@@ -200,13 +199,13 @@ export default function DashboardPage() {
             </div>
 
             {isLoading ? (
-              <div className="surface flex min-h-48 items-center justify-center">
+              <Card className="flex min-h-48 items-center justify-center">
                 <LoaderCircle className="size-5 animate-spin text-stone-400" />
-              </div>
+              </Card>
             ) : contentItems.length === 0 ? (
-              <div className="surface p-6 text-sm leading-6 text-stone-500 dark:text-stone-400">
+              <Card className="p-6 text-sm leading-6 text-stone-500 dark:text-stone-400">
                 No saved content yet. Create your first item from the form on the left.
-              </div>
+              </Card>
             ) : (
               <div className="grid gap-4">
                 {contentItems.map((item) => (

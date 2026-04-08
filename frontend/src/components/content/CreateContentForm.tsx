@@ -1,6 +1,9 @@
 import { Link2, LoaderCircle, Sparkles } from "lucide-react";
 import { useId } from "react";
 import type { ContentType } from "../../types/content";
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { Input } from "../ui/Input";
 import { ContentTypeSelector } from "./ContentTypeSelector";
 
 export interface CreateContentFormValues {
@@ -30,7 +33,7 @@ export function CreateContentForm({
   const linkId = useId();
 
   return (
-    <section className="surface mx-auto w-full max-w-3xl overflow-hidden">
+    <Card as="section" className="mx-auto w-full max-w-3xl overflow-hidden">
       <div className="border-b border-stone-200 bg-stone-50/80 px-6 py-5 dark:border-stone-800 dark:bg-stone-950/60 sm:px-8">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
@@ -70,13 +73,12 @@ export function CreateContentForm({
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="space-y-2">
             <span className="text-sm font-medium text-stone-700 dark:text-stone-200">Title</span>
-            <input
+            <Input
               id={titleId}
               value={values.title}
               onChange={(event) => onChange("title", event.target.value)}
               placeholder="Design systems talk"
               disabled={isSubmitting}
-              className="h-12 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 text-sm text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100 dark:focus:border-stone-600"
             />
           </label>
 
@@ -84,17 +86,14 @@ export function CreateContentForm({
             <span className="text-sm font-medium text-stone-700 dark:text-stone-200">
               Resource link
             </span>
-            <div className="relative">
-              <Link2 className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-stone-400" />
-              <input
-                id={linkId}
-                value={values.link}
-                onChange={(event) => onChange("link", event.target.value)}
-                placeholder="https://example.com/resource"
-                disabled={isSubmitting}
-                className="h-12 w-full rounded-2xl border border-stone-200 bg-stone-50 pl-11 pr-4 text-sm text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100 dark:focus:border-stone-600"
-              />
-            </div>
+            <Input
+              id={linkId}
+              value={values.link}
+              onChange={(event) => onChange("link", event.target.value)}
+              placeholder="https://example.com/resource"
+              disabled={isSubmitting}
+              leadingIcon={<Link2 className="size-4" />}
+            />
           </label>
         </div>
 
@@ -116,17 +115,15 @@ export function CreateContentForm({
             grow with the backend enum later.
           </p>
 
-          <button
+          <Button
             type="button"
             onClick={onSubmit}
-            disabled={isSubmitting}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-stone-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+            leadingIcon={isSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : null}
           >
-            {isSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : null}
             {isSubmitting ? "Saving content..." : "Create content"}
-          </button>
+          </Button>
         </div>
       </div>
-    </section>
+    </Card>
   );
 }

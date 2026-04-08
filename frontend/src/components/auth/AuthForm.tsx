@@ -1,5 +1,8 @@
 import { LoaderCircle } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { Input } from "../ui/Input";
 
 interface AuthFormProps {
   title: string;
@@ -33,7 +36,7 @@ export function AuthForm({
   onSubmit
 }: AuthFormProps) {
   return (
-    <div className="surface w-full max-w-md p-8">
+    <Card className="w-full max-w-md p-8">
       <div className="space-y-2">
         <p className="text-xs font-medium uppercase tracking-[0.22em] text-stone-400">MindVault</p>
         <h1 className="text-3xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
@@ -45,21 +48,19 @@ export function AuthForm({
       <div className="mt-8 space-y-5">
         <label className="block space-y-2">
           <span className="text-sm font-medium text-stone-700 dark:text-stone-200">Username</span>
-          <input
+          <Input
             value={username}
             onChange={(event) => onUsernameChange(event.target.value)}
-            className="h-12 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 text-sm text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100 dark:focus:border-stone-600"
             placeholder="bhumika"
           />
         </label>
 
         <label className="block space-y-2">
           <span className="text-sm font-medium text-stone-700 dark:text-stone-200">Password</span>
-          <input
+          <Input
             type="password"
             value={password}
             onChange={(event) => onPasswordChange(event.target.value)}
-            className="h-12 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 text-sm text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white dark:border-stone-800 dark:bg-stone-950 dark:text-stone-100 dark:focus:border-stone-600"
             placeholder="minimum 6 characters"
           />
         </label>
@@ -70,15 +71,15 @@ export function AuthForm({
           </div>
         ) : null}
 
-        <button
+        <Button
           type="button"
           onClick={onSubmit}
-          disabled={isSubmitting}
-          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-stone-900 px-5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+          fullWidth
+          className="h-12"
+          leadingIcon={isSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : null}
         >
-          {isSubmitting ? <LoaderCircle className="size-4 animate-spin" /> : null}
           {submitLabel}
-        </button>
+        </Button>
 
         <p className="text-center text-sm text-stone-400">
           {footerLabel}{" "}
@@ -87,6 +88,6 @@ export function AuthForm({
           </Link>
         </p>
       </div>
-    </div>
+    </Card>
   );
 }

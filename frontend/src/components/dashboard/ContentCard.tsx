@@ -1,6 +1,8 @@
 import { ExternalLink, FileAudio, FileText, Film, Share2, Trash2 } from "lucide-react";
 import type { Content, ContentType } from "../../types/content";
 import { cn } from "../../lib/cn";
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
 
 const iconByType: Record<ContentType, typeof FileText> = {
   article: FileText,
@@ -20,7 +22,7 @@ export function ContentCard({ item, onDelete, isDeleting }: ContentCardProps) {
   const Icon = iconByType[item.type];
 
   return (
-    <article className="surface p-5">
+    <Card as="article" className="p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
@@ -45,15 +47,16 @@ export function ContentCard({ item, onDelete, isDeleting }: ContentCardProps) {
           </div>
         </div>
 
-        <button
+        <Button
           type="button"
           onClick={() => onDelete(item._id)}
           disabled={isDeleting}
-          className="inline-flex size-10 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-rose-900 dark:hover:bg-rose-950/40 dark:hover:text-rose-300"
+          variant="danger"
+          size="icon"
           aria-label={`Delete ${item.title}`}
         >
           <Trash2 className="size-4" />
-        </button>
+        </Button>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-stone-500 dark:text-stone-400">
@@ -71,6 +74,6 @@ export function ContentCard({ item, onDelete, isDeleting }: ContentCardProps) {
           Ready to include in shared brain
         </span>
       </div>
-    </article>
+    </Card>
   );
 }
