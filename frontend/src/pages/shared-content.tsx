@@ -1,6 +1,8 @@
 import { ExternalLink, LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
 import { contentService } from "../services/content";
 import type { Content } from "../types/content";
 
@@ -36,7 +38,7 @@ export default function SharedContentPage() {
   return (
     <div className="min-h-full bg-canvas px-4 py-6 dark:bg-canvas-dark sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-        <header className="surface px-6 py-5">
+        <Card as="header" className="px-6 py-5">
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-stone-400">MindVault</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">
             Shared brain
@@ -44,22 +46,22 @@ export default function SharedContentPage() {
           <p className="mt-2 text-sm leading-6 text-stone-500 dark:text-stone-400">
             {username ? `${username}'s saved content collection.` : "A public collection of saved content."}
           </p>
-        </header>
+        </Card>
 
         {isLoading ? (
-          <div className="surface flex min-h-48 items-center justify-center">
+          <Card className="flex min-h-48 items-center justify-center">
             <LoaderCircle className="size-5 animate-spin text-stone-400" />
-          </div>
+          </Card>
         ) : errorMessage ? (
-          <div className="surface p-6 text-sm leading-6 text-rose-600 dark:text-rose-300">{errorMessage}</div>
+          <Card className="p-6 text-sm leading-6 text-rose-600 dark:text-rose-300">{errorMessage}</Card>
         ) : contentItems.length === 0 ? (
-          <div className="surface p-6 text-sm leading-6 text-stone-500 dark:text-stone-400">
+          <Card className="p-6 text-sm leading-6 text-stone-500 dark:text-stone-400">
             No shared content is available for this link yet.
-          </div>
+          </Card>
         ) : (
           <div className="grid gap-4">
             {contentItems.map((item) => (
-              <article key={item._id} className="surface p-5">
+              <Card key={item._id} as="article" className="p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <h2 className="truncate text-lg font-semibold text-stone-900 dark:text-stone-100">
@@ -68,17 +70,20 @@ export default function SharedContentPage() {
                     <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-400">{item.type}</p>
                   </div>
 
-                  <a
-                    href={item.link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-2xl border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800"
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    className="px-4"
+                    onClick={() => {
+                      window.open(item.link, "_blank", "noopener,noreferrer");
+                    }}
+                    leadingIcon={<ExternalLink className="size-4" />}
                   >
-                    <ExternalLink className="size-4" />
                     Open
-                  </a>
+                  </Button>
                 </div>
-              </article>
+              </Card>
             ))}
           </div>
         )}

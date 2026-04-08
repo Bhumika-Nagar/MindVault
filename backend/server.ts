@@ -11,7 +11,6 @@ app.use(cors());
 
 app.use("/api/v1",mainRouter);
 
-
 const PORT = process.env.PORT;
 const MONGO_URI = process.env.MONGO_URI;
 
