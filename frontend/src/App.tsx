@@ -1,83 +1,55 @@
-import { useMemo, useState } from "react";
-import { NoteEditor } from "./components/editor/NoteEditor";
-import { Sidebar } from "./components/layout/Sidebar";
-import { TopBar } from "./components/layout/TopBar";
-import { LoadingScreen } from "./components/shared/LoadingScreen";
-import { useDarkMode } from "./hooks/useDarkMode";
-import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
-import { useNotes } from "./hooks/useNotes";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import SignupPage from "./pages/signup";
+import SigninPage from "./pages/signin";
+import DashboardPage from "./pages/dashboard";
+import SharedContentPage from "./pages/shared-content";
+import { getStoredToken } from "./lib/auth";
 
-export default function App() {
-  const [searchValue, setSearchValue] = useState("");
-  const { isDark, toggleTheme } = useDarkMode();
-  const {
-    notes,
-    activeNote,
-    activeNoteId,
-    draftContent,
-    isLoading,
-    saveState,
-    setDraftContent,
-    selectNote,
-    createNote,
-    deleteActiveNote
-  } = useNotes();
+function AuthShell() {
+  return (
+    <div className="min-h-full bg-canvas dark:bg-canvas-dark">
+      <Outlet />
+    </div>
+  );
+}
 
-  useKeyboardShortcuts({
-    onCreateNote: () => {
-      void createNote();
-    },
-    onDeleteNote: () => {
-      void deleteActiveNote();
-    },
-    onToggleTheme: toggleTheme
-  });
+function RequireAuth() {
+  const location = useLocation();
+  const token = getStoredToken();
 
-  const filteredNotes = useMemo(() => {
-    const query = searchValue.trim().toLowerCase();
-    if (!query) {
-      return notes;
-    }
-
-    return notes.filter((note) => {
-      return (
-        note.title.toLowerCase().includes(query) ||
-        note.content.toLowerCase().includes(query)
-      );
-    });
-  }, [notes, searchValue]);
-
-  if (isLoading) {
-    return <LoadingScreen />;
+  if (!token) {
+    return <Navigate to="/signin" replace state={{ from: location }} />;
   }
 
+  return <Outlet />;
+}
+
+function RedirectIfAuthenticated() {
+  const token = getStoredToken();
+
+  if (token) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Outlet />;
+}
+
+export default function App() {
   return (
-    <div className="h-full bg-canvas dark:bg-canvas-dark">
-      <div className="flex h-full flex-col">
-        <TopBar
-          noteCount={notes.length}
-          searchValue={searchValue}
-          onSearchChange={setSearchValue}
-          isDark={isDark}
-          onToggleTheme={toggleTheme}
-          saveState={saveState}
-        />
+    <Routes>
+      <Route element={<AuthShell />}>
+        <Route element={<RedirectIfAuthenticated />}>
+          <Route path="/" element={<Navigate to="/signin" replace />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/signin" element={<SigninPage />} />
+        </Route>
 
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-          <Sidebar
-            notes={filteredNotes}
-            activeNoteId={activeNoteId}
-            searchValue={searchValue}
-            onSelectNote={selectNote}
-            onCreateNote={() => void createNote()}
-            onDeleteNote={() => void deleteActiveNote()}
-          />
+        <Route path="/shared/:shareLink" element={<SharedContentPage />} />
 
-          <main className="min-h-0 flex-1 bg-white dark:bg-stone-950">
-            <NoteEditor note={activeNote} value={draftContent} onChange={setDraftContent} />
-          </main>
-        </div>
-      </div>
-    </div>
+        <Route element={<RequireAuth />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+        </Route>
+      </Route>
+    </Routes>
   );
 }
