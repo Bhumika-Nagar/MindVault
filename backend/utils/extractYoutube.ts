@@ -1,58 +1,80 @@
-import axios from "axios";
+import ytdl from "@distube/ytdl-core";
+import type { IngestionResult } from "../types/job.types.js";
 
-export interface ExtractedContent {
-  title: string;
-  content: string;
-  url: string;
+interface TranscriptLine {
+  text: string;
 }
 
-export const extractYoutubeContent = async (
-  url: string
-): Promise<ExtractedContent | null> => {
-  try {
-    const videoIdMatch = url.match(
-      /(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+interface YoutubeTranscriptApi {
+  fetchTranscript(url: string): Promise<TranscriptLine[]>;
+}
+
+interface YoutubeTranscriptModule {
+  YoutubeTranscript?: YoutubeTranscriptApi;
+}
+
+const cleanText = (value: string | null | undefined): string =>
+  value?.replace(/\s+/g, " ").trim() ?? "";
+
+const loadYoutubeTranscriptApi = async (): Promise<YoutubeTranscriptApi> => {
+  const module = (await import(
+    "youtube-transcript/dist/youtube-transcript.esm.js"
+  )) as YoutubeTranscriptModule;
+
+  if (!module.YoutubeTranscript) {
+    throw new Error(
+      "youtube-transcript ESM entrypoint did not expose YoutubeTranscript.",
     );
-
-    if (!videoIdMatch) {
-      throw new Error("Invalid YouTube URL");
-    }
-
-    const videoId = videoIdMatch[1];
-
-    const videoPage = await axios.get(
-      `https://www.youtube.com/watch?v=${videoId}`
-    );
-
-    const html = videoPage.data;
-    const captionUrlMatch = html.match(/"baseUrl":"(https:[^"]+)"/);
-
-    if (!captionUrlMatch) {
-    throw new Error("No captions available");
-    }
-
-
-const captionUrl = captionUrlMatch[1]
-  .replace(/\\u0026/g, "&")
-  .replace(/\\/g, "");
-    const transcriptRes = await axios.get(captionUrl);
-    const xml = transcriptRes.data;
-
-    const textMatches = [...xml.matchAll(/<text[^>]*>(.*?)<\/text>/g)];
-
-    const content = textMatches
-      .map((match) => match[1])
-      .join(" ")
-      .replace(/&amp;/g, "&")
-      .replace(/&#39;/g, "'");
-
-    return {
-      title: "YouTube Video",
-      content,
-      url,
-    };
-  } catch (error: any) {
-    console.error("YouTube extraction error:", error.message);
-    return null;
   }
+
+  return module.YoutubeTranscript;
+};
+
+export const extractYoutubeContent = async (
+  url: string,
+): Promise<IngestionResult> => {
+  if (!ytdl.validateURL(url)) {
+    throw new Error("Invalid YouTube URL");
+  }
+
+  const info = await ytdl.getBasicInfo(url);
+  const title = cleanText(info.videoDetails.title) || "Untitled video";
+  const description = cleanText(info.videoDetails.description);
+
+  let transcriptStatus: "available" | "fallback" = "available";
+  let transcriptError: string | null = null;
+  let content = "";
+
+  try {
+    const { fetchTranscript } = await loadYoutubeTranscriptApi();
+    const transcript = await fetchTranscript(url);
+
+    content = cleanText(transcript.map((item) => item.text).join(" "));
+  } catch (error) {
+    transcriptStatus = "fallback";
+    transcriptError =
+      error instanceof Error ? error.message : "Unknown transcript error";
+  }
+
+  if (!content) {
+    content =
+      description ||
+      `Transcript unavailable for YouTube video titled "${title}".`;
+  }
+
+  return {
+    title,
+    content,
+    sourceType: "youtube",
+    url,
+    normalizedUrl: url,
+    processedAt: new Date().toISOString(),
+    metadata: {
+      videoId: info.videoDetails.videoId,
+      author: info.videoDetails.author.name,
+      duration: Number.parseInt(info.videoDetails.lengthSeconds, 10) || null,
+      transcriptStatus,
+      transcriptError,
+    },
+  };
 };

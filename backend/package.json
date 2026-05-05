@@ -1,12 +1,16 @@
 {
   "name": "mindvault",
   "version": "1.0.0",
+  "type": "module",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "ts-node server.ts",
+    "dev": "node --enable-source-maps --no-warnings=ExperimentalWarning --loader ts-node/esm server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node --enable-source-maps dist/server.js",
+    "worker": "node --enable-source-maps --no-warnings=ExperimentalWarning --loader ts-node/esm workers/ingestion.worker.ts",
+    "worker:debug": "node --trace-uncaught --trace-warnings --enable-source-maps --no-warnings=ExperimentalWarning --loader ts-node/esm workers/ingestion.worker.ts",
+    "worker:prod": "node --enable-source-maps dist/workers/ingestion.worker.js"
   },
   "keywords": [],
   "author": "",
@@ -20,10 +24,12 @@
     "@xenova/transformers": "^2.17.2",
     "axios": "^1.14.0",
     "bcrypt": "^6.0.0",
+    "bullmq": "^5.76.5",
     "cheerio": "^1.2.0",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "ioredis": "^5.10.1",
     "is-node": "^1.1.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.1.5",
@@ -36,6 +42,10 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/node": "^25.2.0"
+    "@types/node": "^25.2.0",
+    "ts-node-dev": "^2.0.0"
+  },
+  "ts-node": {
+    "esm": true
   }
 }

@@ -12,13 +12,15 @@ export interface CreateContentFormValues {
   type: ContentType;
 }
 
+
+
 interface CreateContentFormProps {
   values: CreateContentFormValues;
   isSubmitting: boolean;
   submitMessage: string | null;
   submitError: string | null;
   onChange: (field: keyof CreateContentFormValues, value: string | ContentType) => void;
-  onSubmit: () => void;
+  onSubmit: ()=>{}
 }
 
 export function CreateContentForm({
