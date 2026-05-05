@@ -1,10 +1,9 @@
 import express, { Request, Response } from "express";
 import { z } from "zod";
-import { Content } from "../src/db";
-import { auth_middleware } from "../src/middlewares";
-import mongoose= require("mongoose");
-import {Link} from "../src/db";
-import { random } from "../src/utils";
+import mongoose from "mongoose";
+import { Content, Link } from "../src/db.js";
+import { auth_middleware } from "../src/middlewares.js";
+import { random } from "../src/utils.js";
 const router = express.Router();
 
 interface AuthRequest extends Request {
