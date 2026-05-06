@@ -18,23 +18,25 @@ import {
 const ingestionRequestSchema = z
   .object({
     url: z.string().trim().min(1).url(),
+    contentId: z.string().trim().min(1),
   })
   .strict();
 
-const parseIngestionUrl = (body: unknown): string => {
+const parseIngestionPayload = (body: unknown): { url: string; contentId: string } => {
   const result = ingestionRequestSchema.safeParse(body);
 
   if (!result.success) {
     throw new ValidationError(
-      "Request body must be exactly { url: string } with a valid absolute URL.",
+      "Request body must be exactly { url: string, contentId: string }.",
       result.error.flatten()
     );
   }
 
-
-  return normalizeIngestionUrl(result.data.url);
+  return {
+    url: normalizeIngestionUrl(result.data.url),
+    contentId: result.data.contentId,
+  };
 };
-
 
 const normalizeJobState = (state: string): IngestionJobState => {
   switch (state) {
@@ -47,12 +49,25 @@ const normalizeJobState = (state: string): IngestionJobState => {
   }
 };
 
-
 export const createIngestionJob = asyncHandler(
   async (req: Request, res: Response) => {
-    const url = parseIngestionUrl(req.body);
+    console.log("[INGEST_CONTROLLER] Entered createIngestionJob", {
+      method: req.method,
+      originalUrl: req.originalUrl,
+      body: req.body,
+      userId: req.userId ?? null,
+    });
 
-    const job = await enqueueIngestionJob(url);
+    const payload = parseIngestionPayload(req.body);
+    console.log("[INGEST_CONTROLLER] Request body validated", payload);
+
+    console.log("[INGEST_CONTROLLER] Calling enqueueIngestionJob", payload);
+    const job = await enqueueIngestionJob(payload);
+    console.log("[INGEST_CONTROLLER] enqueueIngestionJob completed", {
+      jobId: String(job.id),
+      contentId: payload.contentId,
+      url: payload.url,
+    });
 
     const isDuplicate = job.attemptsMade > 0 || job.processedOn !== undefined;
 
@@ -63,13 +78,13 @@ export const createIngestionJob = asyncHandler(
   }
 );
 
-
 export const getIngestionJobStatus = asyncHandler(
   async (
     req: Request<{ id: string }>,
     res: Response<IngestionJobStatusResponse>
   ) => {
     const { id } = req.params;
+    console.log("[INGEST_CONTROLLER] Fetching ingestion job status", { id });
 
     const job = await ingestionQueue.getJob(id);
 
@@ -84,7 +99,6 @@ export const getIngestionJobStatus = asyncHandler(
       state,
       result: job.returnvalue ?? null,
       failedReason: job.failedReason ?? null,
-
       progress: job.progress ?? 0,
     });
   }

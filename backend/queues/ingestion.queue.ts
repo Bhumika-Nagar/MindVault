@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import { Queue } from "bullmq";
 import { ValidationError } from "../utils/httpErrors.js";
+import { normalizeYoutubeUrl } from "../utils/normalizeUrl.js";
 import type { IngestionJobData, IngestionResult } from "../types/job.types.js";
 
 export const INGESTION_QUEUE_NAME = "ingestion";
@@ -24,6 +24,12 @@ export const normalizeIngestionUrl = (inputUrl: string): string => {
 
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     throw new ValidationError("Only HTTP and HTTPS URLs are supported for ingestion.");
+  }
+
+  // Canonicalize YouTube links early so every downstream step sees one stable URL format.
+  const normalizedYoutubeUrl = normalizeYoutubeUrl(parsedUrl.toString());
+  if (normalizedYoutubeUrl) {
+    return normalizedYoutubeUrl;
   }
 
   parsedUrl.hash = "";
@@ -52,9 +58,6 @@ export const normalizeIngestionUrl = (inputUrl: string): string => {
   return parsedUrl.toString();
 };
 
-const buildIngestionJobId = (normalizedUrl: string): string =>
-  createHash("sha256").update(normalizedUrl).digest("hex");
-
 export const ingestionQueue = new Queue<
   IngestionJobData,
   IngestionResult,
@@ -62,10 +65,11 @@ export const ingestionQueue = new Queue<
 >(INGESTION_QUEUE_NAME, {
   connection: redisConnection,
   defaultJobOptions: {
-    attempts: 3,
+    // Retry more patiently when YouTube or transcript extraction hits temporary rate limits.
+    attempts: 5,
     backoff: {
       type: "exponential",
-      delay: 2_000,
+      delay: 5_000,
     },
     removeOnComplete: {
       age: 24 * 60 * 60,
@@ -78,20 +82,51 @@ export const ingestionQueue = new Queue<
   },
 });
 
-export const enqueueIngestionJob = async (
-  url: string,
-) => {
-  const normalizedUrl = normalizeIngestionUrl(url);
+export interface EnqueueIngestionJobInput {
+  url: string;
+  contentId: string;
+}
 
-  return ingestionQueue.add(
+export const enqueueIngestionJob = async (
+  input: EnqueueIngestionJobInput,
+) => {
+  console.log("[INGEST_QUEUE] enqueueIngestionJob called", input);
+
+  const normalizedUrl = normalizeIngestionUrl(input.url);
+
+  console.log("[INGEST_QUEUE] Adding BullMQ job", {
+    queueName: INGESTION_QUEUE_NAME,
+    jobName: INGESTION_JOB_NAME,
+    contentId: input.contentId,
+    url: input.url,
+    normalizedUrl,
+    redisConnection,
+  });
+
+  const job = await ingestionQueue.add(
     INGESTION_JOB_NAME,
     {
-      url,
+      url: input.url,
+      contentId: input.contentId,
       normalizedUrl,
       requestedAt: new Date().toISOString(),
     },
     {
-      jobId: buildIngestionJobId(normalizedUrl),
-    },
+      jobId: input.contentId,
+      // Keep per-job retries explicit at enqueue time so ingestion behavior is easy to trace.
+      attempts: 5,
+      backoff: {
+        type: "exponential",
+        delay: 5_000,
+      },
+    }
   );
+
+  console.log("[INGEST_QUEUE] BullMQ job added", {
+    jobId: String(job.id),
+    contentId: input.contentId,
+    queueName: INGESTION_QUEUE_NAME,
+  });
+
+  return job;
 };
