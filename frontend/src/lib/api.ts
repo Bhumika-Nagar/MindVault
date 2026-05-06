@@ -1,9 +1,11 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import axios from "axios";
 import { getStoredToken } from "./auth";
-import { API_BASE_URL } from "./constants";
 
 export const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: process.env.VITE_API_URL,
   headers: {
     "Content-Type": "application/json"
   }
