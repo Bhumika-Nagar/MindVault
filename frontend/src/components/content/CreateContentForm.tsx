@@ -20,7 +20,7 @@ interface CreateContentFormProps {
   submitMessage: string | null;
   submitError: string | null;
   onChange: (field: keyof CreateContentFormValues, value: string | ContentType) => void;
-  onSubmit: ()=>{}
+  onSubmit: () => void;
 }
 
 export function CreateContentForm({

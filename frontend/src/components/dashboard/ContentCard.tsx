@@ -1,5 +1,5 @@
 import { ExternalLink, FileAudio, FileText, Film, Share2, Trash2 } from "lucide-react";
-import type { Content, ContentType } from "../../types/content";
+import type { Content, ContentStatus, ContentType } from "../../types/content";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
@@ -14,12 +14,36 @@ const iconByType: Record<ContentType, typeof FileText> = {
 
 interface ContentCardProps {
   item: Content;
-  onDelete: (contentId: string) => void;
-  isDeleting: boolean;
+  onDelete?: (contentId: string) => void;
+  isDeleting?: boolean;
+  showShareHint?: boolean;
+  showSourceButton?: boolean;
 }
 
-export function ContentCard({ item, onDelete, isDeleting }: ContentCardProps) {
+const statusCopy: Partial<Record<ContentStatus, string>> = {
+  pending: "Processing content...",
+  failed: "Processing failed"
+};
+
+function getDisplaySummary(item: Content): string | null {
+  if (item.status === "pending" || item.status === "failed") {
+    return statusCopy[item.status] ?? null;
+  }
+
+  const summary = item.summary?.trim();
+  return summary ? summary : null;
+}
+
+export function ContentCard({
+  item,
+  onDelete,
+  isDeleting = false,
+  showShareHint = true,
+  showSourceButton = true
+}: ContentCardProps) {
   const Icon = iconByType[item.type];
+  const summary = getDisplaySummary(item);
+  const hasDeleteAction = typeof onDelete === "function";
 
   return (
     <Card as="article" className="p-5">
@@ -42,38 +66,59 @@ export function ContentCard({ item, onDelete, isDeleting }: ContentCardProps) {
               <h3 className="truncate text-base font-semibold text-stone-900 dark:text-stone-100">
                 {item.title}
               </h3>
-              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-400">{item.type}</p>
+              <span className="mt-2 inline-flex rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-stone-500 dark:bg-stone-800 dark:text-stone-300">
+                {item.type}
+              </span>
             </div>
           </div>
         </div>
 
-        <Button
-          type="button"
-          onClick={() => onDelete(item._id)}
-          disabled={isDeleting}
-          variant="danger"
-          size="icon"
-          aria-label={`Delete ${item.title}`}
-        >
-          <Trash2 className="size-4" />
-        </Button>
+        {hasDeleteAction ? (
+          <Button
+            type="button"
+            onClick={() => onDelete(item._id)}
+            disabled={isDeleting}
+            variant="danger"
+            size="icon"
+            aria-label={`Delete ${item.title}`}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        ) : null}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-stone-500 dark:text-stone-400">
-        <a
-          href={item.link}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-2 transition hover:text-stone-800 dark:hover:text-stone-100"
+      {summary ? (
+        <p
+          className={cn(
+            "mt-4 line-clamp-3 text-sm leading-6 text-stone-500 dark:text-stone-400",
+            item.status === "failed" && "text-rose-600 dark:text-rose-300"
+          )}
         >
-          <ExternalLink className="size-4" />
-          Open source
-        </a>
-        <span className="inline-flex items-center gap-2">
-          <Share2 className="size-4" />
-          Ready to include in shared brain
-        </span>
-      </div>
+          {summary}
+        </p>
+      ) : null}
+
+      {(showSourceButton || showShareHint) ? (
+        <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-stone-500 dark:text-stone-400">
+          {showSourceButton ? (
+            <a
+              href={item.link}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 transition hover:text-stone-800 dark:hover:text-stone-100"
+            >
+              <ExternalLink className="size-4" />
+              Open source
+            </a>
+          ) : null}
+          {showShareHint ? (
+            <span className="inline-flex items-center gap-2">
+              <Share2 className="size-4" />
+              Ready to include in shared brain
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </Card>
   );
 }

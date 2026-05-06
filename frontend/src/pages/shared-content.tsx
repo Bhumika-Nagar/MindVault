@@ -1,7 +1,7 @@
-import { ExternalLink, LoaderCircle } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Button } from "../components/ui/Button";
+import { ContentCard } from "../components/dashboard/ContentCard";
 import { Card } from "../components/ui/Card";
 import { contentService } from "../services/content";
 import type { Content } from "../types/content";
@@ -61,29 +61,12 @@ export default function SharedContentPage() {
         ) : (
           <div className="grid gap-4">
             {contentItems.map((item) => (
-              <Card key={item._id} as="article" className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-lg font-semibold text-stone-900 dark:text-stone-100">
-                      {item.title}
-                    </h2>
-                    <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-400">{item.type}</p>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="md"
-                    className="px-4"
-                    onClick={() => {
-                      window.open(item.link, "_blank", "noopener,noreferrer");
-                    }}
-                    leadingIcon={<ExternalLink className="size-4" />}
-                  >
-                    Open
-                  </Button>
-                </div>
-              </Card>
+              <ContentCard
+                key={item._id}
+                item={item}
+                showShareHint={false}
+                showSourceButton
+              />
             ))}
           </div>
         )}

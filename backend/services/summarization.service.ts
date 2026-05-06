@@ -1,164 +1,300 @@
+import OpenAI from "openai";
 import { cleanWhitespace } from "../utils/ingestion.js";
 
-const OPENAI_RESPONSES_API_URL = "https://api.openai.com/v1/responses";
-const DEFAULT_SUMMARY_MODEL = process.env.OPENAI_SUMMARY_MODEL ?? "gpt-4.1-mini";
-const MAX_SUMMARY_INPUT_CHARS = 12_000;
-const MIN_AI_SUMMARY_CONTENT_CHARS = 120;
+const PRIMARY_SUMMARY_MODEL = "llama-3.1-8b-instant";
+const FALLBACK_SUMMARY_MODEL = "llama-3.3-70b-versatile";
+const SUMMARY_TIMEOUT_MS = 12_000;
+const MAX_SUMMARY_INPUT_CHARS = 16_000;
+const MIN_SUMMARY_INPUT_CHARS = 120;
+const FALLBACK_SUMMARY_CHARS = 200;
 
-interface ResponsesApiPayload {
-  output_text?: unknown;
+interface SummarizationContext {
+  contentId?: string;
+  jobId?: string;
 }
 
-const truncateForSummary = (content: string): string =>
-  cleanWhitespace(content).slice(0, MAX_SUMMARY_INPUT_CHARS);
+interface SummarizationLogContext extends SummarizationContext {
+  model: string | null;
+  contentLength: number;
+  reason?: string | undefined;
+  error?: string | undefined;
+}
 
-export const buildFallbackSummary = (content: string): string => {
-  const normalized = truncateForSummary(content);
+interface SummaryAttemptResult {
+  summary: string | null;
+  model: string;
+  reason?: string | undefined;
+}
 
-  if (!normalized) {
-    return "Content too short";
-  }
-
-  return normalized.slice(0, 200);
+type ChatMessage = {
+  role: "system" | "user";
+  content: string;
 };
 
-export const shouldAttemptAiSummary = (content: string): boolean =>
-  truncateForSummary(content).length >= MIN_AI_SUMMARY_CONTENT_CHARS;
-
-const parseSummaryFromResponse = (payload: unknown): string | null => {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-
-  const { output_text: outputText } = payload as ResponsesApiPayload;
-
-  if (typeof outputText !== "string") {
-    return null;
-  }
-
-  const normalized = cleanWhitespace(outputText);
-  return normalized.length > 0 ? normalized : null;
+const getClient = (): OpenAI => {
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    baseURL: "https://api.groq.com/openai/v1",
+    maxRetries: 1,
+  });
 };
 
-const logSummarizationEvent = (
-  level: "info" | "error",
-  message: string,
-  context: Record<string, unknown>,
-): void => {
-  const payload = JSON.stringify({
-    level,
-    message,
+const SUMMARY_SYSTEM_PROMPT = [
+  "Summarize the provided content in 3 to 6 sentences.",
+  "Keep the wording beginner-friendly and concise.",
+  "Preserve key insights and factual meaning.",
+  "Do not invent missing details.",
+  "Avoid filler, bullets, or markdown.",
+].join(" ");
+
+const createLogPayload = (
+  event: "summary_started" | "summary_success" | "summary_fallback_used" | "summary_failed",
+  context: SummarizationLogContext,
+): string =>
+  JSON.stringify({
+    event,
     timestamp: new Date().toISOString(),
-    ...context,
+    model: context.model,
+    contentLength: context.contentLength,
+    reason: context.reason ?? null,
+    error: context.error ?? null,
+    contentId: context.contentId ?? null,
+    jobId: context.jobId ?? null,
   });
 
-  if (level === "error") {
-    console.error(payload);
-    return;
-  }
-
-  console.log(payload);
+const logSummaryInfo = (
+  event: "summary_started" | "summary_success" | "summary_fallback_used",
+  context: SummarizationLogContext,
+): void => {
+  console.log(createLogPayload(event, context));
 };
 
-export const summarizeText = async (content: string): Promise<string> => {
-  if (typeof content !== "string") {
-    logSummarizationEvent("error", "summary_generation_failed", {
-      reason: "invalid_content_type",
-      contentType: typeof content,
-    });
-    return buildFallbackSummary("");
+const logSummaryError = (
+  event: "summary_failed",
+  context: SummarizationLogContext,
+): void => {
+  console.error(createLogPayload(event, context));
+};
+
+const buildFallbackSummary = (content: string): string => {
+  const normalizedContent = cleanWhitespace(content);
+
+  if (normalizedContent.length < MIN_SUMMARY_INPUT_CHARS) {
+    return "Content too short to summarize";
   }
 
-  const preparedContent = truncateForSummary(content);
+  return normalizedContent.slice(0, FALLBACK_SUMMARY_CHARS);
+};
+
+const prepareContentForSummary = (content: string): string => {
+  const normalizedContent = cleanWhitespace(content);
+
+  if (normalizedContent.length <= MAX_SUMMARY_INPUT_CHARS) {
+    return normalizedContent;
+  }
+
+  // Preserve both the beginning and the ending of long documents so the model
+  // sees the primary setup plus later conclusions without sending gigantic transcripts.
+  const headLength = Math.floor(MAX_SUMMARY_INPUT_CHARS * 0.7);
+  const tailLength = MAX_SUMMARY_INPUT_CHARS - headLength;
+  const head = normalizedContent.slice(0, headLength);
+  const tail = normalizedContent.slice(-tailLength);
+
+  return `${head} ...[truncated for summarization]... ${tail}`;
+};
+
+const extractSummaryText = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalizedSummary = cleanWhitespace(value);
+  return normalizedSummary.length > 0 ? normalizedSummary : null;
+};
+
+const extractReasonFromError = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return "unknown_error";
+  }
+
+  const message = error.message.toLowerCase();
+
+  if (message.includes("rate limit") || message.includes("429")) {
+    return "rate_limited";
+  }
+
+  if (message.includes("timeout")) {
+    return "timeout";
+  }
+
+  if (message.includes("401") || message.includes("403") || message.includes("api key")) {
+    return "authentication_failed";
+  }
+
+  return "provider_request_failed";
+};
+
+const buildMessages = (content: string): ChatMessage[] => [
+  {
+    role: "system",
+    content: SUMMARY_SYSTEM_PROMPT,
+  },
+  {
+    role: "user",
+    content,
+  },
+];
+
+const attemptSummary = async (
+  preparedContent: string,
+  model: string,
+): Promise<SummaryAttemptResult> => {
+  const client = getClient();
+  const completion = await client.chat.completions.create(
+    {
+      model,
+      temperature: 0.2,
+      max_tokens: 220,
+      messages: buildMessages(preparedContent),
+    },
+    {
+      timeout: SUMMARY_TIMEOUT_MS,
+      maxRetries: 1,
+    },
+  );
+
+  const firstChoice = completion.choices[0];
+  const summary = extractSummaryText(firstChoice?.message?.content);
+
+  if (!summary) {
+    return {
+      summary: null,
+      model,
+      reason: "empty_summary_response",
+    };
+  }
+
+  return {
+    summary,
+    model,
+  };
+};
+
+export async function summarizeText(content: string): Promise<string>;
+export async function summarizeText(
+  content: string,
+  context: SummarizationContext,
+): Promise<string>;
+export async function summarizeText(
+  content: string,
+  context: SummarizationContext = {},
+): Promise<string> {
+  if (typeof content !== "string") {
+    const fallbackSummary = buildFallbackSummary("");
+
+    logSummaryInfo("summary_fallback_used", {
+      ...context,
+      model: null,
+      contentLength: 0,
+      reason: "invalid_content_type",
+    });
+
+    return fallbackSummary;
+  }
+
+  const preparedContent = prepareContentForSummary(content);
+  const fallbackSummary = buildFallbackSummary(preparedContent);
+  const contentLength = preparedContent.length;
 
   if (!preparedContent) {
-    logSummarizationEvent("info", "summary_fallback_used", {
+    logSummaryInfo("summary_fallback_used", {
+      ...context,
+      model: null,
+      contentLength,
       reason: "empty_content",
     });
-    return buildFallbackSummary(preparedContent);
+
+    return "Content too short to summarize";
   }
 
-  if (!shouldAttemptAiSummary(preparedContent)) {
-    logSummarizationEvent("info", "summary_fallback_used", {
+  if (preparedContent.length < MIN_SUMMARY_INPUT_CHARS) {
+    logSummaryInfo("summary_fallback_used", {
+      ...context,
+      model: null,
+      contentLength,
       reason: "content_too_short",
-      contentLength: preparedContent.length,
     });
-    return buildFallbackSummary(preparedContent);
+
+    return fallbackSummary;
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    logSummarizationEvent("info", "summary_fallback_used", {
+  if (!process.env.OPENAI_API_KEY) {
+    logSummaryInfo("summary_fallback_used", {
+      ...context,
+      model: null,
+      contentLength,
       reason: "missing_api_key",
-      contentLength: preparedContent.length,
     });
-    return buildFallbackSummary(preparedContent);
+
+    return fallbackSummary;
   }
 
-  try {
-    const response = await fetch(OPENAI_RESPONSES_API_URL, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: DEFAULT_SUMMARY_MODEL,
-        input: [
-          {
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text: [
-                  "Summarize the content in 2 to 4 sentences.",
-                  "Capture the main points and preserve factual accuracy.",
-                  "Do not use filler, boilerplate, or markdown bullets.",
-                ].join(" "),
-              },
-            ],
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: preparedContent,
-              },
-            ],
-          },
-        ],
-      }),
+  const modelsToTry = [PRIMARY_SUMMARY_MODEL, FALLBACK_SUMMARY_MODEL] as const;
+  let lastFailureReason = "provider_request_failed";
+  let lastErrorMessage: string | undefined;
+
+  for (const model of modelsToTry) {
+    logSummaryInfo("summary_started", {
+      ...context,
+      model,
+      contentLength,
+      reason: preparedContent.length < cleanWhitespace(content).length ? "truncated_input" : "standard_input",
     });
 
-    if (!response.ok) {
-      const responseBody = await response.text().catch(() => null);
-      logSummarizationEvent("error", "summary_generation_failed", {
-        reason: "api_response_not_ok",
-        statusCode: response.status,
-        responseBody: responseBody?.slice(0, 500) ?? null,
+    try {
+      const result = await attemptSummary(preparedContent, model);
+
+      if (result.summary) {
+        logSummaryInfo("summary_success", {
+          ...context,
+          model: result.model,
+          contentLength,
+        });
+
+        return result.summary;
+      }
+
+      lastFailureReason = result.reason ?? "empty_summary_response";
+
+      logSummaryError("summary_failed", {
+        ...context,
+        model,
+        contentLength,
+        reason: lastFailureReason,
       });
-      return buildFallbackSummary(preparedContent);
-    }
+    } catch (error) {
+      lastFailureReason = extractReasonFromError(error);
+      lastErrorMessage = error instanceof Error ? error.message : "Unknown summarization error";
 
-    const payload = (await response.json()) as unknown;
-    const summary = parseSummaryFromResponse(payload);
-
-    if (!summary) {
-      logSummarizationEvent("error", "summary_generation_failed", {
-        reason: "empty_summary_response",
+      logSummaryError("summary_failed", {
+        ...context,
+        model,
+        contentLength,
+        reason: lastFailureReason,
+        error: lastErrorMessage,
       });
-      return buildFallbackSummary(preparedContent);
     }
-
-    return summary;
-  } catch (error) {
-    logSummarizationEvent("error", "summary_generation_failed", {
-      reason: "request_error",
-      error: error instanceof Error ? error.message : "Unknown summarization error",
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-    return buildFallbackSummary(preparedContent);
   }
-};
+
+  logSummaryInfo("summary_fallback_used", {
+    ...context,
+    model: PRIMARY_SUMMARY_MODEL,
+    contentLength,
+    reason: lastFailureReason,
+    error: lastErrorMessage,
+  });
+
+  return fallbackSummary;
+}
+
+export type { SummarizationContext };
